@@ -84,17 +84,27 @@ func parseHeader(data []byte) (header, []byte, error) {
 	copy(h.wrappedDEK[:], data[offWrappedDEK:offBodyNonce])
 	copy(h.bodyNonce[:], data[offBodyNonce:bodyOffset])
 
-	switch {
-	case h.kdfTime == 0 || h.kdfTime > maxKDFTime:
-		return header{}, nil, fmt.Errorf("%w: KDF time %d", ErrCorrupt, h.kdfTime)
-	case h.kdfThreads == 0 || h.kdfThreads > maxKDFThreads:
-		return header{}, nil, fmt.Errorf("%w: KDF threads %d", ErrCorrupt, h.kdfThreads)
-	case h.kdfMemory < 8*uint32(h.kdfThreads) || h.kdfMemory > maxKDFMemory:
-		return header{}, nil, fmt.Errorf("%w: KDF memory %d KiB", ErrCorrupt, h.kdfMemory)
-	case len(data)-bodyOffset > maxBodySize:
+	if err := validateKDF(h.kdfTime, h.kdfMemory, h.kdfThreads); err != nil {
+		return header{}, nil, fmt.Errorf("%w: %v", ErrCorrupt, err)
+	}
+	if len(data)-bodyOffset > maxBodySize {
 		return header{}, nil, fmt.Errorf("%w: body of %d bytes", ErrCorrupt, len(data)-bodyOffset)
 	}
 	return h, data[bodyOffset:], nil
+}
+
+// validateKDF reports whether the Argon2id cost parameters are both safe to
+// derive with and within the bounds the format accepts.
+func validateKDF(time, memory uint32, threads uint8) error {
+	switch {
+	case time == 0 || time > maxKDFTime:
+		return fmt.Errorf("KDF time %d", time)
+	case threads == 0 || threads > maxKDFThreads:
+		return fmt.Errorf("KDF threads %d", threads)
+	case memory < 8*uint32(threads) || memory > maxKDFMemory:
+		return fmt.Errorf("KDF memory %d KiB", memory)
+	}
+	return nil
 }
 
 // marshal encodes h into a full header plus body nonce. The layout is fixed,
