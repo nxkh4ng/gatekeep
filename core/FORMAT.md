@@ -102,12 +102,16 @@ wrapped DEK `0x20..0x4f`, and body nonce `0x50..0x5b`:
 Parsing then re-marshalling this header must reproduce the same 103 bytes.
 `core/format_test.go` pins this vector.
 
-## File handling (implemented with persistence in M4)
+## File handling
 
-- Vault file mode `0600`, parent directory `0700`.
-- Reject files larger than `103 + 64 MiB` before reading them into memory.
-- Writes go to a temp file in the same directory, then `fsync` and `rename`.
-- Keep the previous sealed file as `vault.bak`.
+- Vault file mode `0600`; a missing parent directory is created `0700`.
+- Files larger than `103 + 64 MiB` are rejected before the body is read.
+- Writes go to a `0600` temp file in the same directory, are `fsync`ed, and are
+  renamed into place; the directory is `fsync`ed afterwards.
+- The previous file is renamed to `vault.bak` immediately before the new file
+  is renamed into place. A crash in that window leaves the previous vault
+  intact at `vault.bak`.
+- Temp files contain sealed bytes only; plaintext is never written to disk.
 
 ## Out of scope for v1
 

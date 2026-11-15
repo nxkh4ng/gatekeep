@@ -37,8 +37,9 @@ var (
 	// were modified. It deliberately does not distinguish the two.
 	ErrInvalidPassword = errors.New("gatekeep: invalid master password or corrupted vault")
 
-	// ErrTooLarge reports a vault body that exceeds the format's size limit.
-	ErrTooLarge = errors.New("gatekeep: vault body too large")
+	// ErrTooLarge reports a vault body or file that exceeds the format's size
+	// limit.
+	ErrTooLarge = errors.New("gatekeep: vault too large")
 )
 
 // kdf returns h's cost parameters.
