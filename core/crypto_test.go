@@ -10,6 +10,21 @@ import (
 // still within the bounds a parser accepts.
 var testKDF = kdfParams{time: 1, memory: 8, threads: 1}
 
+// sealVault and openVault wrap the key-based primitives so crypto tests can
+// treat a vault as an opaque password-protected file.
+func sealVault(password, plaintext []byte, kdf kdfParams) ([]byte, error) {
+	k, err := newKeys(password, kdf)
+	if err != nil {
+		return nil, err
+	}
+	return k.seal(plaintext)
+}
+
+func openVault(data, password []byte) ([]byte, error) {
+	_, body, err := unlock(data, password)
+	return body, err
+}
+
 func sealedTestVault(t *testing.T) (sealed, password []byte) {
 	t.Helper()
 	password = []byte("correct horse battery staple")

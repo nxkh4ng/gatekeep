@@ -46,23 +46,82 @@ func (h header) kdf() kdfParams {
 	return kdfParams{time: h.kdfTime, memory: h.kdfMemory, threads: h.kdfThreads}
 }
 
-// sealVault encrypts plaintext into a complete vault file. It generates a
-// fresh salt, data key, and nonces, and records kdf in the header.
-func sealVault(password, plaintext []byte, kdf kdfParams) ([]byte, error) {
+// vaultKeys is the key material of an unlocked vault: the password-derived
+// KEK, the data key it wraps, and the salt and KDF parameters that reproduce
+// the KEK.
+type vaultKeys struct {
+	kek  [keySize]byte
+	dek  [keySize]byte
+	salt [saltSize]byte
+	kdf  kdfParams
+}
+
+// newKeys creates fresh key material for a vault protected by password.
+func newKeys(password []byte, kdf kdfParams) (vaultKeys, error) {
 	if err := validateKDF(kdf.time, kdf.memory, kdf.threads); err != nil {
-		return nil, fmt.Errorf("gatekeep: sealing: %w", err)
+		return vaultKeys{}, fmt.Errorf("gatekeep: invalid KDF parameters: %w", err)
 	}
+	var k vaultKeys
+	k.kdf = kdf
+	if err := randomFill(k.salt[:]); err != nil {
+		return vaultKeys{}, err
+	}
+	if err := randomFill(k.dek[:]); err != nil {
+		return vaultKeys{}, err
+	}
+	kek := deriveKey(password, k.salt, kdf)
+	copy(k.kek[:], kek)
+	clear(kek)
+	return k, nil
+}
+
+// unlock derives the KEK, unwraps the data key, and decrypts the body. It
+// returns ErrInvalidPassword when the wrapped key cannot be opened and
+// ErrCorrupt when the header is malformed or the body fails to authenticate.
+func unlock(data, password []byte) (vaultKeys, []byte, error) {
+	h, ct, err := parseHeader(data)
+	if err != nil {
+		return vaultKeys{}, nil, err
+	}
+
+	kdf := h.kdf()
+	kek := deriveKey(password, h.salt, kdf)
+	defer clear(kek)
+
+	dek, err := gcmOpen(kek, h.wrapNonce[:], h.wrappedDEK[:], data[:offWrapNonce])
+	if err != nil {
+		return vaultKeys{}, nil, fmt.Errorf("%w: cannot unwrap data key", ErrInvalidPassword)
+	}
+	defer clear(dek)
+	if len(dek) != keySize {
+		return vaultKeys{}, nil, fmt.Errorf("%w: wrapped key is %d bytes", ErrCorrupt, len(dek))
+	}
+
+	body, err := gcmOpen(dek, h.bodyNonce[:], ct, data[:bodyOffset])
+	if err != nil {
+		return vaultKeys{}, nil, fmt.Errorf("%w: body authentication failed", ErrCorrupt)
+	}
+
+	var k vaultKeys
+	copy(k.kek[:], kek)
+	copy(k.dek[:], dek)
+	k.salt = h.salt
+	k.kdf = kdf
+	return k, body, nil
+}
+
+// seal encrypts plaintext into a complete vault file, using fresh wrap and
+// body nonces on every call.
+func (k vaultKeys) seal(plaintext []byte) ([]byte, error) {
 	if len(plaintext)+tagSize > maxBodySize {
 		return nil, fmt.Errorf("%w: %d bytes of plaintext", ErrTooLarge, len(plaintext))
 	}
 
 	h := header{
-		kdfTime:    kdf.time,
-		kdfMemory:  kdf.memory,
-		kdfThreads: kdf.threads,
-	}
-	if err := randomFill(h.salt[:]); err != nil {
-		return nil, err
+		kdfTime:    k.kdf.time,
+		kdfMemory:  k.kdf.memory,
+		kdfThreads: k.kdf.threads,
+		salt:       k.salt,
 	}
 	if err := randomFill(h.wrapNonce[:]); err != nil {
 		return nil, err
@@ -71,18 +130,9 @@ func sealVault(password, plaintext []byte, kdf kdfParams) ([]byte, error) {
 		return nil, err
 	}
 
-	var dek [keySize]byte
-	if err := randomFill(dek[:]); err != nil {
-		return nil, err
-	}
-	defer clear(dek[:])
-
-	kek := deriveKey(password, h.salt, kdf)
-	defer clear(kek)
-
-	// The wrapped key is authenticated against the header up to the salt, so
-	// KDF parameters cannot be swapped without detection.
-	wrapped, err := gcmSeal(kek, h.wrapNonce[:], dek[:], h.marshal()[:offWrapNonce])
+	// The wrapped key is authenticated against the header prefix up to the
+	// salt, so KDF parameters cannot be swapped without detection.
+	wrapped, err := gcmSeal(k.kek[:], h.wrapNonce[:], k.dek[:], h.marshal()[:offWrapNonce])
 	if err != nil {
 		return nil, err
 	}
@@ -91,39 +141,11 @@ func sealVault(password, plaintext []byte, kdf kdfParams) ([]byte, error) {
 	// The body is authenticated against the whole header including the body
 	// nonce.
 	hdr := h.marshal()
-	body, err := gcmSeal(dek[:], h.bodyNonce[:], plaintext, hdr)
+	body, err := gcmSeal(k.dek[:], h.bodyNonce[:], plaintext, hdr)
 	if err != nil {
 		return nil, err
 	}
 	return append(hdr, body...), nil
-}
-
-// openVault decrypts a complete vault file. It returns ErrInvalidPassword when
-// the wrapped data key cannot be opened, and ErrCorrupt when the header is
-// malformed or the authenticated body fails to decrypt.
-func openVault(data, password []byte) ([]byte, error) {
-	h, ct, err := parseHeader(data)
-	if err != nil {
-		return nil, err
-	}
-
-	kek := deriveKey(password, h.salt, h.kdf())
-	defer clear(kek)
-
-	dek, err := gcmOpen(kek, h.wrapNonce[:], h.wrappedDEK[:], data[:offWrapNonce])
-	if err != nil {
-		return nil, fmt.Errorf("%w: cannot unwrap data key", ErrInvalidPassword)
-	}
-	defer clear(dek)
-	if len(dek) != keySize {
-		return nil, fmt.Errorf("%w: wrapped key is %d bytes", ErrCorrupt, len(dek))
-	}
-
-	body, err := gcmOpen(dek, h.bodyNonce[:], ct, data[:bodyOffset])
-	if err != nil {
-		return nil, fmt.Errorf("%w: body authentication failed", ErrCorrupt)
-	}
-	return body, nil
 }
 
 // deriveKey stretches the master password into a 32-byte AES key. kdf must
