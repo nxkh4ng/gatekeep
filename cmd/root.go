@@ -20,7 +20,7 @@ func Execute() error {
 	if err != nil {
 		return err
 	}
-	return newRoot(&app{vault: vault}).Execute()
+	return newRoot(&app{vault: vault, prompter: newTerminalPrompter()}).Execute()
 }
 
 // newRoot builds the command tree with the given dependencies.

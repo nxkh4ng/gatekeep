@@ -8,7 +8,8 @@ import (
 
 // app holds the dependencies shared by all commands.
 type app struct {
-	vault string
+	vault    string
+	prompter Prompter
 }
 
 // errNotImplemented marks commands that exist in the tree but are filled in

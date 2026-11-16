@@ -5,6 +5,7 @@ go 1.27.4
 require (
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.59.0
+	golang.org/x/term v0.48.0
 )
 
 require (

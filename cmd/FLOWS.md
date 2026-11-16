@@ -1,8 +1,9 @@
 # CLI flows
 
 Mermaid diagrams of the `gatekeep` command flows. They describe the intended
-M5 behavior: `version` is implemented, the other commands are wired in the
-command tree but return `not implemented yet` until M5.2.
+M5 behavior: `version` and `init` are implemented; the other commands are
+wired in the command tree but return `not implemented yet` until later
+milestones.
 
 All commands except `init` and `version` share the unlock/save lifecycle
 below. Prompts require a terminal; there is no scripting mode.
