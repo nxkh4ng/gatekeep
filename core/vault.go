@@ -13,10 +13,10 @@ const bodyVersion = 1
 
 var (
 	// ErrLocked reports an operation attempted on a vault after Lock.
-	ErrLocked = errors.New("gatekeep: vault is locked")
+	ErrLocked = errors.New("vault is locked")
 
 	// ErrNotFound reports an entry ID that is not in the vault.
-	ErrNotFound = errors.New("gatekeep: entry not found")
+	ErrNotFound = errors.New("entry not found")
 )
 
 // vaultData is the plaintext JSON body of a vault file.

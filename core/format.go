@@ -46,7 +46,7 @@ var magic = [4]byte{'G', 'K', 'P', 'V'}
 // ErrCorrupt reports a vault file that is truncated, malformed, or uses an
 // unknown format version or KDF. It is returned before any key derivation, so
 // it never distinguishes a wrong password from a damaged file.
-var ErrCorrupt = errors.New("gatekeep: corrupt or unsupported vault")
+var ErrCorrupt = errors.New("corrupt or unsupported vault")
 
 // header is the plaintext, authenticated prefix of a vault file.
 type header struct {

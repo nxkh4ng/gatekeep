@@ -35,11 +35,11 @@ var (
 	// ErrInvalidPassword reports a vault that cannot be unlocked: either the
 	// master password is wrong or the salt, KDF parameters, or wrapped key
 	// were modified. It deliberately does not distinguish the two.
-	ErrInvalidPassword = errors.New("gatekeep: invalid master password or corrupted vault")
+	ErrInvalidPassword = errors.New("invalid master password or corrupted vault")
 
 	// ErrTooLarge reports a vault body or file that exceeds the format's size
 	// limit.
-	ErrTooLarge = errors.New("gatekeep: vault too large")
+	ErrTooLarge = errors.New("vault too large")
 )
 
 // kdf returns h's cost parameters.
@@ -60,7 +60,7 @@ type vaultKeys struct {
 // newKeys creates fresh key material for a vault protected by password.
 func newKeys(password []byte, kdf kdfParams) (vaultKeys, error) {
 	if err := validateKDF(kdf.time, kdf.memory, kdf.threads); err != nil {
-		return vaultKeys{}, fmt.Errorf("gatekeep: invalid KDF parameters: %w", err)
+		return vaultKeys{}, fmt.Errorf("invalid KDF parameters: %w", err)
 	}
 	var k vaultKeys
 	k.kdf = kdf
