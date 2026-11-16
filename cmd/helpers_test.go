@@ -1,0 +1,56 @@
+package cmd
+
+import (
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+
+	"github.com/nxkh4ng/gatekeep/core"
+)
+
+const testMasterPassword = "correct horse battery staple"
+
+var (
+	seedOnce sync.Once
+	seedData []byte
+	seedErr  error
+)
+
+// writeTestVault writes a fresh copy of a vault sealed with testMasterPassword.
+// The sealed seed is created once per test binary to keep Argon2id costs down.
+func writeTestVault(t *testing.T) string {
+	t.Helper()
+	seedOnce.Do(func() {
+		v, err := core.New([]byte(testMasterPassword))
+		if err != nil {
+			seedErr = err
+			return
+		}
+		seedData, seedErr = v.Seal()
+		v.Lock()
+	})
+	if seedErr != nil {
+		t.Fatalf("seeding test vault: %v", seedErr)
+	}
+
+	path := filepath.Join(t.TempDir(), "vault.gk")
+	if err := os.WriteFile(path, seedData, 0o600); err != nil {
+		t.Fatalf("writing test vault: %v", err)
+	}
+	return path
+}
+
+func readTestEntries(t *testing.T, path string) []core.Entry {
+	t.Helper()
+	v, err := core.LoadFile(path, []byte(testMasterPassword))
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	defer v.Lock()
+	entries, err := v.Entries()
+	if err != nil {
+		t.Fatalf("Entries: %v", err)
+	}
+	return entries
+}
