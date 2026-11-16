@@ -85,7 +85,7 @@ func parseHeader(data []byte) (header, []byte, error) {
 	copy(h.bodyNonce[:], data[offBodyNonce:bodyOffset])
 
 	if err := validateKDF(h.kdfTime, h.kdfMemory, h.kdfThreads); err != nil {
-		return header{}, nil, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		return header{}, nil, fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}
 	if len(data)-bodyOffset > maxBodySize {
 		return header{}, nil, fmt.Errorf("%w: body of %d bytes", ErrCorrupt, len(data)-bodyOffset)
