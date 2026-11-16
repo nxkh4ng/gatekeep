@@ -11,6 +11,41 @@ import (
 // appName is used in help text and for the default data directory.
 const appName = "gatekeep"
 
+// usageTemplate is cobra's default usage template with a single usage line for
+// the root command. The template is inherited by subcommands, so they are
+// handled explicitly to keep their default rendering.
+const usageTemplate = `Usage:{{if not .HasParent}}
+  {{.CommandPath}} [command] [flags]{{else}}{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}}{{end}}{{if gt (len .Aliases) 0}}
+
+Aliases:
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+Examples:
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{$cmds := .Commands}}{{if eq (len .Groups) 0}}
+
+Available Commands:{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{else}}{{range $group := .Groups}}
+
+{{.Title}}{{range $cmds}}{{if (and (eq .GroupID $group.ID) (or .IsAvailableCommand (eq .Name "help")))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if not .AllChildCommandsHaveGroup}}
+
+Additional Commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
+Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`
+
 // version is overridden at build time with -ldflags "-X .../cmd.version=...".
 var version = "dev"
 
@@ -28,7 +63,7 @@ func newRoot(a *app) *cobra.Command {
 	root := &cobra.Command{
 		Use:           appName,
 		Short:         "Local password manager",
-		Long:          "GateKeep stores passwords in a single encrypted vault file.",
+		Long:          "gatekeep stores passwords in a single encrypted vault file.",
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -37,6 +72,7 @@ func newRoot(a *app) *cobra.Command {
 		},
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 	}
+	root.SetUsageTemplate(usageTemplate)
 	root.SetVersionTemplate(appName + " {{.Version}}\n")
 	root.PersistentFlags().StringVar(&a.vault, "vault", a.vault, "path to the vault file")
 

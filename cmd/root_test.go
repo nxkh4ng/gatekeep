@@ -5,6 +5,7 @@ import (
 	"io"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -66,6 +67,39 @@ func TestRootCommands(t *testing.T) {
 	}
 	if root.PersistentFlags().Lookup("vault") == nil {
 		t.Error("root is missing the --vault flag")
+	}
+}
+
+func TestRootUsageLine(t *testing.T) {
+	root := newRoot(&app{vault: "/tmp/vault.gk", prompter: &fakePrompter{}})
+	root.SetArgs([]string{})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(io.Discard)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if want := "Usage:\n  gatekeep [command] [flags]\n"; !strings.Contains(out.String(), want) {
+		t.Fatalf("help output = %q, want usage line %q", out.String(), want)
+	}
+	if strings.Contains(out.String(), "\n  gatekeep [command]\n") {
+		t.Fatalf("help output still has the default usage lines: %q", out.String())
+	}
+}
+
+func TestSubcommandUsageUnchanged(t *testing.T) {
+	root := newRoot(&app{vault: "/tmp/vault.gk", prompter: &fakePrompter{}})
+	root.SetArgs([]string{"add", "--help"})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(io.Discard)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if want := "Usage:\n  gatekeep add [title] [flags]\n"; !strings.Contains(out.String(), want) {
+		t.Fatalf("help output = %q, want usage line %q", out.String(), want)
 	}
 }
 
