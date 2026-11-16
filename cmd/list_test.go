@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/nxkh4ng/gatekeep/core"
 )
 
-func listOutput(t *testing.T, path string, args ...string) (stdout, stderr string) {
+func runListCommand(t *testing.T, path string, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	p := &fakePrompter{passwords: [][]byte{[]byte(testMasterPassword)}}
 	root := newRoot(&app{vault: path, prompter: p})
@@ -18,10 +17,17 @@ func listOutput(t *testing.T, path string, args ...string) (stdout, stderr strin
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&errOut)
-	if err := root.Execute(); err != nil {
+	err = root.Execute()
+	return out.String(), errOut.String(), err
+}
+
+func listOutput(t *testing.T, path string, args ...string) (stdout, stderr string) {
+	t.Helper()
+	stdout, stderr, err := runListCommand(t, path, args...)
+	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	return out.String(), errOut.String()
+	return stdout, stderr
 }
 
 func TestListTable(t *testing.T) {
@@ -108,7 +114,37 @@ func TestListJSON(t *testing.T) {
 	if errOut != "" {
 		t.Fatalf("stderr = %q, want empty", errOut)
 	}
-	var got []core.Entry
+	var got []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("unmarshalling JSON: %v", err)
+	}
+
+	wantTitles := []string{"Bank", "Gmail", "YouTube", "YouTube"}
+	if len(got) != len(wantTitles) {
+		t.Fatalf("entries = %d, want %d", len(got), len(wantTitles))
+	}
+	for i := range wantTitles {
+		var title string
+		if err := json.Unmarshal(got[i]["title"], &title); err != nil {
+			t.Fatalf("entry %d title: %v", i, err)
+		}
+		if title != wantTitles[i] {
+			t.Fatalf("entry %d title = %q, want %q", i, title, wantTitles[i])
+		}
+		if _, ok := got[i]["password"]; ok {
+			t.Fatalf("entry %d unexpectedly includes a password", i)
+		}
+	}
+}
+
+func TestListJSONShowPasswords(t *testing.T) {
+	path := writeTestVaultWithEntries(t)
+
+	out, errOut := listOutput(t, path, "--json", "--show-passwords")
+	if errOut != "" {
+		t.Fatalf("stderr = %q, want empty", errOut)
+	}
+	var got []map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("unmarshalling JSON: %v", err)
 	}
@@ -119,9 +155,29 @@ func TestListJSON(t *testing.T) {
 		t.Fatalf("entries = %d, want %d", len(got), len(wantTitles))
 	}
 	for i := range wantTitles {
-		if got[i].Title != wantTitles[i] || got[i].Password != wantPasswords[i] {
-			t.Fatalf("entry %d = %+v, want title %q password %q", i, got[i], wantTitles[i], wantPasswords[i])
+		var title, password string
+		if err := json.Unmarshal(got[i]["title"], &title); err != nil {
+			t.Fatalf("entry %d title: %v", i, err)
 		}
+		if err := json.Unmarshal(got[i]["password"], &password); err != nil {
+			t.Fatalf("entry %d password: %v", i, err)
+		}
+		if title != wantTitles[i] || password != wantPasswords[i] {
+			t.Fatalf("entry %d = %q/%q, want %q/%q", i, title, password, wantTitles[i], wantPasswords[i])
+		}
+	}
+}
+
+func TestListShowPasswordsRequiresJSON(t *testing.T) {
+	out, _, err := runListCommand(t, filepath.Join(t.TempDir(), "missing.gk"), "--show-passwords")
+	if err == nil {
+		t.Fatal("Execute: want error")
+	}
+	if !strings.Contains(err.Error(), "--show-passwords requires --json") {
+		t.Fatalf("error = %q, want requires --json", err)
+	}
+	if out != "" {
+		t.Fatalf("stdout = %q, want empty", out)
 	}
 }
 
