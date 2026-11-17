@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/nxkh4ng/gatekeep/core"
 	"github.com/spf13/cobra"
 )
 
@@ -28,6 +29,12 @@ func runPasswd(cmd *cobra.Command, a *app) error {
 	if err != nil {
 		return err
 	}
+
+	lock, err := core.LockFile(a.vault)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Close() }()
 
 	v, err := loadVault(cmd, a)
 	if err != nil {

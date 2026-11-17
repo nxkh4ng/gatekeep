@@ -23,6 +23,12 @@ func newInitCmd(a *app) *cobra.Command {
 }
 
 func runInit(cmd *cobra.Command, a *app) error {
+	lock, err := core.LockFile(a.vault)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Close() }()
+
 	if _, err := os.Stat(a.vault); err == nil {
 		return fmt.Errorf("vault already exists at %s", a.vault)
 	} else if !errors.Is(err, fs.ErrNotExist) {

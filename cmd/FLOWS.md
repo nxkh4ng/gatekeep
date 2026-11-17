@@ -2,6 +2,7 @@
 
 - Mermaid diagrams of the `gatekeep` command flows.
 - All commands except `init` share the unlock/save lifecycle below.
+- Mutating commands (`init`, `add`, `edit`, `rm`, `passwd`) take an exclusive lock on `<vault>.lock`; `list` and `show` do not.
 - Prompts require a terminal; there is no scripting mode.
 
 ## Shared unlock and save
@@ -25,7 +26,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["gatekeep init"] --> B{"vault file exists?"}
+    A["gatekeep init"] --> L["Acquire &lt;vault&gt;.lock"]
+    L --> B{"vault file exists?"}
     B -->|yes| X["error: vault already exists, no overwrite"]
     B -->|no| C["prompt master password (hidden)"]
     C --> D["prompt master password again"]
@@ -44,7 +46,8 @@ flag).
 
 ```mermaid
 flowchart TD
-    A["gatekeep add [title]"] --> U["Unlock"]
+    A["gatekeep add [title]"] --> L["Acquire &lt;vault&gt;.lock"]
+    L --> U["Unlock"]
     U --> T{"title argument?"}
     T -->|no| P1["prompt Title (required, re-ask if empty)"]
     T -->|yes| C1{"--username?"}
@@ -72,7 +75,7 @@ flowchart TD
     F --> S["sort by title"]
     G --> S
     S --> J{"--json?"}
-    J -->|yes| K["print JSON including passwords"]
+    J -->|yes| K["print JSON (passwords only with --show-passwords)"]
     J -->|no| L["print table: Title, Username, URL"]
 ```
 
@@ -109,7 +112,8 @@ fields with `--url=` or `--notes=`.
 
 ```mermaid
 flowchart TD
-    A["gatekeep edit &lt;query&gt;"] --> U["Unlock"]
+    A["gatekeep edit &lt;query&gt;"] --> L["Acquire &lt;vault&gt;.lock"]
+    L --> U["Unlock"]
     U --> R["Resolve selector"]
     R --> F{"any field flag?"}
     F -->|no| W["wizard: Title, Username, Password, URL, Notes"]
@@ -128,7 +132,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["gatekeep rm &lt;query&gt;"] --> U["Unlock"]
+    A["gatekeep rm &lt;query&gt;"] --> L["Acquire &lt;vault&gt;.lock"]
+    L --> U["Unlock"]
     U --> R["Resolve selector"]
     R --> C{"confirm delete? [y/N]"}
     C -->|y| D["Delete + SaveFile"]
@@ -139,7 +144,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["gatekeep passwd"] --> B["Unlock with current master password"]
+    A["gatekeep passwd"] --> L["Acquire &lt;vault&gt;.lock"]
+    L --> B["Unlock with current master password"]
     B --> C["prompt new master password (hidden)"]
     C --> D["prompt new master password again"]
     D --> E{"match?"}

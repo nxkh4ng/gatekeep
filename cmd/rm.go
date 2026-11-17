@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nxkh4ng/gatekeep/core"
 	"github.com/spf13/cobra"
 )
 
@@ -24,6 +25,12 @@ func runRm(cmd *cobra.Command, a *app, query string) error {
 	if query == "" {
 		return errors.New("query is required")
 	}
+
+	lock, err := core.LockFile(a.vault)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Close() }()
 
 	v, err := loadVault(cmd, a)
 	if err != nil {
