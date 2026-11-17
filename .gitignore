@@ -1,0 +1,14 @@
+# Local binaries
+/gatekeep
+/main
+/dist/
+
+# Test output
+*.test
+coverage.out
+
+# Local vaults and backups
+*.gk
+*.gk.bak
+*.gk.lock
+.gatekeep-*
