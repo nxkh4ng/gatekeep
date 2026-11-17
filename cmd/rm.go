@@ -36,6 +36,9 @@ func runRm(cmd *cobra.Command, a *app, query string) error {
 		return err
 	}
 	entry, err := resolveEntry(cmd, a.prompter, entries, query)
+	if errors.Is(err, errAborted) {
+		return printAborted(cmd)
+	}
 	if err != nil {
 		return err
 	}
@@ -45,8 +48,7 @@ func runRm(cmd *cobra.Command, a *app, query string) error {
 		return err
 	}
 	if answer = strings.ToLower(strings.TrimSpace(answer)); answer != "y" && answer != "yes" {
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
-		return err
+		return printAborted(cmd)
 	}
 
 	if err := v.Delete(entry.ID); err != nil {

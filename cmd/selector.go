@@ -16,6 +16,12 @@ import (
 // errAborted reports that the user cancelled an interactive prompt.
 var errAborted = errors.New("aborted")
 
+// printAborted reports a cancelled interactive prompt as a clean exit.
+func printAborted(cmd *cobra.Command) error {
+	_, err := fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
+	return err
+}
+
 // resolveEntry finds the entry matching query: an exact title first, then a
 // title/username substring. Several matches open a picker.
 func resolveEntry(cmd *cobra.Command, p Prompter, entries []core.Entry, query string) (core.Entry, error) {

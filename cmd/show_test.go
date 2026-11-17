@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -112,11 +111,11 @@ func TestShowAbortPicker(t *testing.T) {
 	}
 
 	out, _, err := runShowCommand(t, path, p, "YouTube")
-	if !errors.Is(err, errAborted) {
-		t.Fatalf("Execute() error = %v, want errAborted", err)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
 	}
-	if out != "" {
-		t.Fatalf("stdout = %q, want empty", out)
+	if want := "Aborted.\n"; out != want {
+		t.Fatalf("output = %q, want %q", out, want)
 	}
 	wantPrompts := []string{"Master password: ", "Select [1-2, q]: "}
 	if !slices.Equal(p.prompts, wantPrompts) {

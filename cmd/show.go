@@ -38,6 +38,9 @@ func runShow(cmd *cobra.Command, a *app, query string) error {
 		return err
 	}
 	entry, err := resolveEntry(cmd, a.prompter, entries, query)
+	if errors.Is(err, errAborted) {
+		return printAborted(cmd)
+	}
 	if err != nil {
 		return err
 	}

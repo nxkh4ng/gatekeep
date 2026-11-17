@@ -89,7 +89,8 @@ flowchart TD
     C -->|1 match| S
     C -->|many matches| P
     C -->|no match| X["error: entry not found"]
-    P --> S
+    P -->|number| S
+    P -->|q or empty| Q["print: Aborted. (exit 0)"]
 ```
 
 ## `show`

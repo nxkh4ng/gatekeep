@@ -153,6 +153,41 @@ func TestEditPicker(t *testing.T) {
 	}
 }
 
+func TestEditAbortPicker(t *testing.T) {
+	path := writeTestVaultWithEntries(t)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	p := &fakePrompter{
+		passwords: [][]byte{[]byte(testMasterPassword)},
+		lines:     []string{"q"},
+	}
+
+	out, errOut, err := runEditCommand(t, path, p, "YouTube")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if want := "Aborted.\n"; out != want {
+		t.Fatalf("output = %q, want %q", out, want)
+	}
+	if !strings.Contains(errOut, "1)") || !strings.Contains(errOut, "2)") {
+		t.Fatalf("stderr = %q, want the picker list", errOut)
+	}
+	wantPrompts := []string{"Master password: ", "Select [1-2, q]: "}
+	if !slices.Equal(p.prompts, wantPrompts) {
+		t.Fatalf("prompts = %q, want %q", p.prompts, wantPrompts)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("aborted edit rewrote the vault")
+	}
+}
+
 func TestEditTitleRequired(t *testing.T) {
 	path := writeTestVaultWithEntries(t)
 	before, err := os.ReadFile(path)
