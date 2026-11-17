@@ -57,7 +57,7 @@ func TestRootCommands(t *testing.T) {
 	for _, c := range root.Commands() {
 		names[c.Name()] = true
 	}
-	for _, want := range []string{"init", "add", "list", "show", "edit", "rm", "passwd", "version"} {
+	for _, want := range []string{"init", "add", "list", "show", "edit", "rm", "passwd"} {
 		if !names[want] {
 			t.Errorf("root is missing %q command", want)
 		}
@@ -106,7 +106,7 @@ func TestSubcommandUsageUnchanged(t *testing.T) {
 func TestVaultFlagOverridesDefault(t *testing.T) {
 	a := &app{vault: "/tmp/default.gk"}
 	root := newRoot(a)
-	root.SetArgs([]string{"--vault", "/tmp/other.gk", "version"})
+	root.SetArgs([]string{"--vault", "/tmp/other.gk"})
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
 
@@ -115,19 +115,5 @@ func TestVaultFlagOverridesDefault(t *testing.T) {
 	}
 	if a.vault != "/tmp/other.gk" {
 		t.Fatalf("vault = %q, want /tmp/other.gk", a.vault)
-	}
-}
-
-func TestVersionCommand(t *testing.T) {
-	root := newRoot(&app{vault: "/tmp/vault.gk"})
-	root.SetArgs([]string{"version"})
-	var out bytes.Buffer
-	root.SetOut(&out)
-
-	if err := root.Execute(); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if want := appName + " " + version + "\n"; out.String() != want {
-		t.Fatalf("version output = %q, want %q", out.String(), want)
 	}
 }

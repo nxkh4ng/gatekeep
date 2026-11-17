@@ -84,7 +84,6 @@ func newRoot(a *app) *cobra.Command {
 		newEditCmd(a),
 		newRmCmd(a),
 		newPasswdCmd(a),
-		newVersionCmd(a),
 	)
 	return root
 }

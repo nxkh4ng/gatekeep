@@ -1,10 +1,8 @@
 # CLI flows
 
-Mermaid diagrams of the `gatekeep` command flows. All commands are
-implemented as of M5.8.
-
-All commands except `init` and `version` share the unlock/save lifecycle
-below. Prompts require a terminal; there is no scripting mode.
+- Mermaid diagrams of the `gatekeep` command flows.
+- All commands except `init` share the unlock/save lifecycle below.
+- Prompts require a terminal; there is no scripting mode.
 
 ## Shared unlock and save
 
@@ -152,11 +150,4 @@ flowchart TD
     K -->|yes| W["warn: backup still uses the old password"]
     R --> G["print: master password changed"]
     W --> G
-```
-
-## `version`
-
-```mermaid
-flowchart TD
-    A["gatekeep version"] --> B["print: gatekeep <version>"]
 ```
