@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"slices"
 	"strings"
@@ -13,10 +14,10 @@ import (
 
 const newMasterPassword = "a much better master password"
 
-func runPasswdCommand(t *testing.T, path string, p *fakePrompter) (stdout, stderr string, err error) {
+func runPasswdCommand(t *testing.T, path string, p *fakePrompter, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	root := newRoot(&app{vault: path, prompter: p})
-	root.SetArgs([]string{"passwd"})
+	root.SetArgs(append([]string{"passwd"}, args...))
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&errOut)
@@ -67,6 +68,47 @@ func TestPasswdChangesMasterPassword(t *testing.T) {
 	if len(entries) != 4 {
 		t.Fatalf("entries = %d, want 4", len(entries))
 	}
+	backup := path + ".bak"
+	if _, err := os.Stat(backup); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("old-password backup still exists at %s: %v", backup, err)
+	}
+}
+
+func TestPasswdKeepBackup(t *testing.T) {
+	path := writeTestVaultWithEntries(t)
+	p := &fakePrompter{passwords: [][]byte{
+		[]byte(testMasterPassword),
+		[]byte(newMasterPassword),
+		[]byte(newMasterPassword),
+	}}
+
+	out, errOut, err := runPasswdCommand(t, path, p, "--backup")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if want := "Master password changed.\n"; out != want {
+		t.Fatalf("output = %q, want %q", out, want)
+	}
+	if !strings.Contains(errOut, "old master password") {
+		t.Fatalf("stderr = %q, want an old-password warning", errOut)
+	}
+
+	backup := path + ".bak"
+	oldVault, err := core.LoadFile(backup, []byte(testMasterPassword))
+	if err != nil {
+		t.Fatalf("LoadFile backup with the old password: %v", err)
+	}
+	oldVault.Lock()
+
+	if _, err := core.LoadFile(backup, []byte(newMasterPassword)); !errors.Is(err, core.ErrInvalidPassword) {
+		t.Fatalf("LoadFile backup with the new password: error = %v, want ErrInvalidPassword", err)
+	}
+
+	v, err := core.LoadFile(path, []byte(newMasterPassword))
+	if err != nil {
+		t.Fatalf("LoadFile with the new password: %v", err)
+	}
+	v.Lock()
 }
 
 func TestPasswdMismatch(t *testing.T) {
@@ -134,5 +176,8 @@ func TestPasswdRetriesEmptyNewPassword(t *testing.T) {
 	}
 	if bytes.Equal(before, after) {
 		t.Fatal("passwd did not rewrite the vault")
+	}
+	if _, err := os.Stat(path + ".bak"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("old-password backup still exists: %v", err)
 	}
 }

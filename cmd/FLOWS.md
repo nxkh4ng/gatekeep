@@ -147,7 +147,11 @@ flowchart TD
     D --> E{"match?"}
     E -->|no| X["error, vault unchanged"]
     E -->|yes| F["ChangePassword + SaveFile"]
-    F --> G["print: master password changed"]
+    F --> K{"--backup?"}
+    K -->|no| R["remove vault.gk.bak"]
+    K -->|yes| W["warn: backup still uses the old password"]
+    R --> G["print: master password changed"]
+    W --> G
 ```
 
 ## `version`
