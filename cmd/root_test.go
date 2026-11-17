@@ -5,6 +5,7 @@ import (
 	"io"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -62,11 +63,34 @@ func TestRootCommands(t *testing.T) {
 			t.Errorf("root is missing %q command", want)
 		}
 	}
-	if root.Version != version {
-		t.Errorf("root version = %q, want %q", root.Version, version)
+	if want := resolvedVersion(); root.Version != want {
+		t.Errorf("root version = %q, want %q", root.Version, want)
 	}
 	if root.PersistentFlags().Lookup("vault") == nil {
 		t.Error("root is missing the --vault flag")
+	}
+}
+
+func TestVersionFrom(t *testing.T) {
+	tests := []struct {
+		name    string
+		ldflags string
+		info    *debug.BuildInfo
+		want    string
+	}{
+		{"ldflags wins", "v1.2.3", &debug.BuildInfo{Main: debug.Module{Version: "v9.9.9"}}, "v1.2.3"},
+		{"build info", "dev", &debug.BuildInfo{Main: debug.Module{Version: "v0.2.0"}}, "v0.2.0"},
+		{"devel", "dev", &debug.BuildInfo{Main: debug.Module{Version: "(devel)"}}, "dev"},
+		{"empty ldflags", "", &debug.BuildInfo{Main: debug.Module{Version: "v0.2.0"}}, "v0.2.0"},
+		{"no info", "dev", nil, "dev"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := versionFrom(tt.ldflags, tt.info); got != tt.want {
+				t.Fatalf("versionFrom(%q, ...) = %q, want %q", tt.ldflags, got, tt.want)
+			}
+		})
 	}
 }
 

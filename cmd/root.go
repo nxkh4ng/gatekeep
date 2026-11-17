@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 )
@@ -49,6 +50,27 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 // version is overridden at build time with -ldflags "-X .../cmd.version=...".
 var version = "dev"
 
+// versionFrom resolves the version reported by the binary. Build-time ldflags
+// win, then the module version recorded in the build info, then "dev".
+func versionFrom(ldflags string, info *debug.BuildInfo) string {
+	if ldflags != "" && ldflags != "dev" {
+		return ldflags
+	}
+	if info != nil {
+		if v := info.Main.Version; v != "" && v != "(devel)" {
+			return v
+		}
+	}
+	return "dev"
+}
+
+// resolvedVersion reads the running binary's build info and resolves its
+// version. It is called when the command tree is built.
+func resolvedVersion() string {
+	info, _ := debug.ReadBuildInfo()
+	return versionFrom(version, info)
+}
+
 // Execute runs the gatekeep CLI.
 func Execute() error {
 	vault, err := defaultVaultPath()
@@ -64,7 +86,7 @@ func newRoot(a *app) *cobra.Command {
 		Use:           appName,
 		Short:         "Local password manager",
 		Long:          "gatekeep stores passwords in a single encrypted vault file.",
-		Version:       version,
+		Version:       resolvedVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
