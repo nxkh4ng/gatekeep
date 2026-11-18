@@ -1,8 +1,9 @@
 # CLI flows
 
 - Mermaid diagrams of the `gatekeep` command flows.
-- All commands except `init` share the unlock/save lifecycle below.
+- All commands except `init` and `gen` share the unlock/save lifecycle below.
 - Mutating commands (`init`, `add`, `edit`, `rm`, `passwd`) take an exclusive lock on `<vault>.lock`; `list` and `show` do not.
+- `gen` is standalone: it never reads the vault, prompts for a master password, or takes a lock.
 - Prompts require a terminal; there is no scripting mode.
 
 ## Shared unlock and save
@@ -78,6 +79,22 @@ flowchart TD
     U5 -->|yes| S["Add + SaveFile"]
     U5 -->|no| P4["prompt Notes (optional)"]
     P4 --> S
+```
+
+## `gen`
+
+`gen` never reads the vault, so it needs no master password and takes no lock.
+It prints one password per line on stdout. A policy that cannot be satisfied
+fails before anything is printed.
+
+```mermaid
+flowchart TD
+    A["gatekeep gen"] --> B["parse flags into a policy"]
+    B --> C{"policy satisfiable?"}
+    C -->|no| X["error: invalid policy, no output"]
+    C -->|yes| D["add the required characters"]
+    D --> E["fill to length, shuffle with crypto/rand"]
+    E --> F["print --count passwords"]
 ```
 
 ## `list`

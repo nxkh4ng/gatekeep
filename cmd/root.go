@@ -102,6 +102,7 @@ func newRoot(a *app) *cobra.Command {
 	root.AddCommand(
 		newInitCmd(a),
 		newAddCmd(a),
+		newGenCmd(),
 		newListCmd(a),
 		newShowCmd(a),
 		newEditCmd(a),
