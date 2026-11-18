@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -39,15 +40,19 @@ func TestInitCreatesVault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat vault: %v", err)
 	}
-	if perm := fi.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("vault mode = %#o, want 0600", perm)
-	}
-	di, err := os.Stat(dir)
-	if err != nil {
-		t.Fatalf("stat vault directory: %v", err)
-	}
-	if perm := di.Mode().Perm(); perm != 0o700 {
-		t.Fatalf("vault directory mode = %#o, want 0700", perm)
+
+	// Windows ignores Unix file modes and reports 0666/0777 instead.
+	if runtime.GOOS != "windows" {
+		if perm := fi.Mode().Perm(); perm != 0o600 {
+			t.Fatalf("vault mode = %#o, want 0600", perm)
+		}
+		di, err := os.Stat(dir)
+		if err != nil {
+			t.Fatalf("stat vault directory: %v", err)
+		}
+		if perm := di.Mode().Perm(); perm != 0o700 {
+			t.Fatalf("vault directory mode = %#o, want 0700", perm)
+		}
 	}
 
 	v, err := core.LoadFile(path, []byte(password))

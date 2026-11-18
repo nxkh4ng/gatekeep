@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -58,21 +59,24 @@ func TestLockFileCreatesLock(t *testing.T) {
 		t.Fatalf("LockFile: %v", err)
 	}
 
-	di, err := os.Stat(dir)
-	if err != nil {
-		t.Fatalf("stat lock directory: %v", err)
-	}
-	if perm := di.Mode().Perm(); perm != 0o700 {
-		t.Fatalf("lock directory mode = %#o, want 0700", perm)
-	}
-
 	lockPath := path + ".lock"
 	fi, err := os.Stat(lockPath)
 	if err != nil {
 		t.Fatalf("stat lock file: %v", err)
 	}
-	if perm := fi.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("lock file mode = %#o, want 0600", perm)
+
+	// Windows ignores Unix file modes and reports 0666/0777 instead.
+	if runtime.GOOS != "windows" {
+		di, err := os.Stat(dir)
+		if err != nil {
+			t.Fatalf("stat lock directory: %v", err)
+		}
+		if perm := di.Mode().Perm(); perm != 0o700 {
+			t.Fatalf("lock directory mode = %#o, want 0700", perm)
+		}
+		if perm := fi.Mode().Perm(); perm != 0o600 {
+			t.Fatalf("lock file mode = %#o, want 0600", perm)
+		}
 	}
 
 	if err := lock.Close(); err != nil {

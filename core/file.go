@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 const (
@@ -90,6 +91,10 @@ func writeVault(path string, data []byte) error {
 		return fmt.Errorf("replacing vault (previous version at %s): %w", backup, err)
 	}
 
+	// Windows cannot flush a directory handle; NTFS journals the rename.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	d, err := os.Open(dir)
 	if err != nil {
 		return fmt.Errorf("opening vault directory: %w", err)

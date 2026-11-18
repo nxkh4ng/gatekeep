@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -51,6 +52,9 @@ func TestSaveLoadFile(t *testing.T) {
 }
 
 func TestSaveFilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix file modes are not enforced on Windows")
+	}
 	path := filepath.Join(t.TempDir(), "nested", "vault.gk")
 	v := newTestVault(t, []byte("pw"))
 	if err := v.SaveFile(path); err != nil {

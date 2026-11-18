@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 
 	"github.com/spf13/cobra"
@@ -110,9 +111,16 @@ func newRoot(a *app) *cobra.Command {
 	return root
 }
 
-// defaultVaultPath returns $XDG_DATA_HOME/gatekeep/vault.gk, falling back to
+// defaultVaultPath returns the per-user vault path.
+// Windows: %LOCALAPPDATA%\gatekeep\vault.gk.
+// Others: $XDG_DATA_HOME/gatekeep/vault.gk, falling back to
 // ~/.local/share/gatekeep/vault.gk.
 func defaultVaultPath() (string, error) {
+	if runtime.GOOS == "windows" {
+		if dir := os.Getenv("LOCALAPPDATA"); dir != "" {
+			return filepath.Join(dir, appName, "vault.gk"), nil
+		}
+	}
 	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" && filepath.IsAbs(dir) {
 		return filepath.Join(dir, appName, "vault.gk"), nil
 	}

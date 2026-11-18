@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"golang.org/x/sys/unix"
 )
 
 // ErrVaultInUse reports that another process holds the vault lock.
@@ -33,9 +31,9 @@ func LockFile(vaultPath string) (*FileLock, error) {
 		return nil, fmt.Errorf("opening vault lock %s: %w", lockPath, err)
 	}
 
-	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	if err := lockFile(f); err != nil {
 		_ = f.Close()
-		if errors.Is(err, unix.EWOULDBLOCK) {
+		if isLockBusy(err) {
 			return nil, fmt.Errorf("%w (lock file: %s)", ErrVaultInUse, lockPath)
 		}
 		return nil, fmt.Errorf("locking %s: %w", lockPath, err)
@@ -50,5 +48,5 @@ func (l *FileLock) Close() error {
 	}
 	f := l.f
 	l.f = nil
-	return errors.Join(unix.Flock(int(f.Fd()), unix.LOCK_UN), f.Close())
+	return errors.Join(unlockFile(f), f.Close())
 }

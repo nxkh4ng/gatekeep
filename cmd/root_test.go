@@ -51,6 +51,21 @@ func TestDefaultVaultPath(t *testing.T) {
 	})
 }
 
+func TestDefaultVaultPathWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-only path resolution")
+	}
+
+	t.Setenv("LOCALAPPDATA", `C:\Users\test\AppData\Local`)
+	got, err := defaultVaultPath()
+	if err != nil {
+		t.Fatalf("defaultVaultPath: %v", err)
+	}
+	if want := filepath.Join(`C:\Users\test\AppData\Local`, appName, "vault.gk"); got != want {
+		t.Fatalf("defaultVaultPath = %q, want %q", got, want)
+	}
+}
+
 func TestRootCommands(t *testing.T) {
 	root := newRoot(&app{vault: "/tmp/vault.gk"})
 
