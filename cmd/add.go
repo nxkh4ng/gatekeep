@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/nxkh4ng/gatekeep/core"
@@ -48,20 +49,14 @@ func runAdd(cmd *cobra.Command, a *app, args []string) error {
 		}
 	}
 
-	var username string
-	if cmd.Flags().Changed("username") {
-		username, err = cmd.Flags().GetString("username")
-		if err != nil {
-			return err
-		}
-		if username = strings.TrimSpace(username); username == "" {
-			return errors.New("username is required")
-		}
-	} else {
-		username, err = requiredLine(cmd, a.prompter, "Username: ", "Username")
-		if err != nil {
-			return err
-		}
+	entries, err := v.Entries()
+	if err != nil {
+		return err
+	}
+
+	username, err := resolveAddUsername(cmd, a, entries, title)
+	if err != nil {
+		return err
 	}
 
 	password, err := requiredPassword(cmd, a.prompter, "Password: ")
@@ -93,6 +88,58 @@ func runAdd(cmd *cobra.Command, a *app, args []string) error {
 	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Added %s (%s)\n", title, username)
 	return err
+}
+
+// findDuplicate returns the entry that already has the same title and
+// username. Titles compare case-insensitively; usernames compare exactly,
+// because a different case is a different username. The vault itself allows
+// duplicates; this is an add-time guard against accidental copies.
+func findDuplicate(entries []core.Entry, title, username string) (core.Entry, bool) {
+	i := slices.IndexFunc(entries, func(e core.Entry) bool {
+		return strings.EqualFold(e.Title, title) && e.Username == username
+	})
+	if i < 0 {
+		return core.Entry{}, false
+	}
+	return entries[i], true
+}
+
+// resolveAddUsername returns the username for a new entry. A --username flag is
+// explicit, so a duplicate fails with the existing entry and an edit hint. A
+// prompted username is re-asked until it no longer duplicates an entry with the
+// same title.
+func resolveAddUsername(cmd *cobra.Command, a *app, entries []core.Entry, title string) (string, error) {
+	if cmd.Flags().Changed("username") {
+		username, err := cmd.Flags().GetString("username")
+		if err != nil {
+			return "", err
+		}
+		if username = strings.TrimSpace(username); username == "" {
+			return "", errors.New("username is required")
+		}
+		if e, ok := findDuplicate(entries, title, username); ok {
+			return "", fmt.Errorf(
+				"entry already exists: %q (%s); use a different username or run %q to update it",
+				e.Title, e.Username, "gatekeep edit",
+			)
+		}
+		return username, nil
+	}
+
+	for {
+		username, err := requiredLine(cmd, a.prompter, "Username: ", "Username")
+		if err != nil {
+			return "", err
+		}
+		e, ok := findDuplicate(entries, title, username)
+		if !ok {
+			return username, nil
+		}
+		if _, err := fmt.Fprintf(cmd.ErrOrStderr(),
+			"%q already exists for %q; try another.\n", e.Username, e.Title); err != nil {
+			return "", err
+		}
+	}
 }
 
 // stringField returns a flag value when the flag was provided, and prompts for

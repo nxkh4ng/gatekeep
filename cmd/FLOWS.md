@@ -44,6 +44,18 @@ optional and skipped with an empty line. A field supplied as an argument or
 flag is not prompted. The password is always prompted (there is no password
 flag).
 
+Before the password prompt, `add` refuses an entry whose title and username
+already exist. Titles compare case-insensitively (`gmail` matches `Gmail`);
+usernames compare exactly (`ALICE@gmail.com` does not match
+`alice@gmail.com`). A matching username under a different title, or a matching
+title under a different username, is allowed.
+
+A prompted username that duplicates an entry is warned about on stderr and
+asked again, so a typo does not cost the title. A duplicated `--username` flag
+is an error instead, because flags are explicit: the error names the existing
+entry and suggests `gatekeep edit`. Ctrl-C cancels the re-prompt loop, and
+nothing is written until the entry is complete.
+
 ```mermaid
 flowchart TD
     A["gatekeep add [title]"] --> L["Acquire &lt;vault&gt;.lock"]
@@ -52,9 +64,13 @@ flowchart TD
     T -->|no| P1["prompt Title (required, re-ask if empty)"]
     T -->|yes| C1{"--username?"}
     P1 --> C1
-    C1 -->|yes| U3["prompt Password (required, hidden)"]
+    C1 -->|yes| D{"same title+username exists?"}
     C1 -->|no| P2["prompt Username (required, re-ask if empty)"]
-    P2 --> U3
+    P2 --> D
+    D -->|no| U3["prompt Password (required, hidden)"]
+    D -->|yes, prompted| W["stderr: username already exists"]
+    W --> P2
+    D -->|yes, from flag| X["error: entry exists + hint (no write)"]
     U3 --> U4{"--url?"}
     U4 -->|yes| U5{"--notes?"}
     U4 -->|no| P3["prompt URL (optional)"]
