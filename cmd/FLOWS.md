@@ -96,11 +96,18 @@ flowchart TD
 
 ## `show`
 
+The password is masked by default; `--reveal` prints it. The mask has a fixed
+length so the real password length does not leak. The hint goes to stderr, so
+stdout stays parseable, and an entry without a password is printed unmasked.
+
 ```mermaid
 flowchart TD
     A["gatekeep show &lt;query&gt;"] --> U["Unlock"]
     U --> R["Resolve selector"]
-    R --> P["print Title, Username, Password, URL, Notes"]
+    R --> P{"--reveal?"}
+    P -->|yes| Q["print Title, Username, Password, URL, Notes"]
+    P -->|no| M["print Title, Username, ********, URL, Notes"]
+    M --> H["stderr: Password hidden; rerun with --reveal"]
 ```
 
 ## `edit`

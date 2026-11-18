@@ -6,12 +6,14 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/nxkh4ng/gatekeep/core"
 )
 
-func runShowCommand(t *testing.T, path string, p *fakePrompter, query string) (stdout, stderr string, err error) {
+func runShowCommand(t *testing.T, path string, p *fakePrompter, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	root := newRoot(&app{vault: path, prompter: p})
-	root.SetArgs([]string{"show", query})
+	root.SetArgs(append([]string{"show"}, args...))
 	var out, errOut bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&errOut)
@@ -27,13 +29,16 @@ func TestShowUniqueTitle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if errOut != "" {
-		t.Fatalf("stderr = %q, want empty", errOut)
-	}
-	for _, want := range []string{"Gmail", "alice@gmail.com", "mail-secret", "https://mail.google.com"} {
+	for _, want := range []string{"Gmail", "alice@gmail.com", maskedPassword, "https://mail.google.com"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output = %q, want %q", out, want)
 		}
+	}
+	if strings.Contains(out, "mail-secret") {
+		t.Fatalf("output leaked the password: %q", out)
+	}
+	if !strings.Contains(errOut, "--reveal") {
+		t.Fatalf("stderr = %q, want a --reveal hint", errOut)
 	}
 	if strings.Contains(out, "Notes:") {
 		t.Fatalf("output contains an empty notes field: %q", out)
@@ -54,11 +59,11 @@ func TestShowPicker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if !strings.Contains(out, "bob@gmail.com") || !strings.Contains(out, "bob-secret") {
-		t.Fatalf("output = %q, want the selected bob entry", out)
+	if !strings.Contains(out, "bob@gmail.com") || !strings.Contains(out, maskedPassword) {
+		t.Fatalf("output = %q, want the masked bob entry", out)
 	}
-	if strings.Contains(out, "alice-secret") {
-		t.Fatalf("output leaked the other account: %q", out)
+	if strings.Contains(out, "alice-secret") || strings.Contains(out, "bob-secret") {
+		t.Fatalf("output leaked a password: %q", out)
 	}
 	if strings.Contains(out, "URL:") || strings.Contains(out, "Notes:") {
 		t.Fatalf("output contains empty optional fields: %q", out)
@@ -82,11 +87,46 @@ func TestShowSubstringUnique(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if !strings.Contains(out, "bank-secret") {
-		t.Fatalf("output = %q, want the Bank entry", out)
+	if !strings.Contains(out, "Bank") || !strings.Contains(out, maskedPassword) {
+		t.Fatalf("output = %q, want the masked Bank entry", out)
+	}
+	if strings.Contains(out, "bank-secret") {
+		t.Fatalf("output leaked the password: %q", out)
 	}
 	if want := []string{"Master password: "}; !slices.Equal(p.prompts, want) {
 		t.Fatalf("prompts = %q, want %q", p.prompts, want)
+	}
+}
+
+func TestShowReveal(t *testing.T) {
+	path := writeTestVaultWithEntries(t)
+	p := &fakePrompter{passwords: [][]byte{[]byte(testMasterPassword)}}
+
+	out, errOut, err := runShowCommand(t, path, p, "gmail", "--reveal")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(out, "mail-secret") {
+		t.Fatalf("output = %q, want the revealed password", out)
+	}
+	if strings.Contains(out, maskedPassword) {
+		t.Fatalf("output masked a revealed password: %q", out)
+	}
+	if errOut != "" {
+		t.Fatalf("stderr = %q, want empty", errOut)
+	}
+}
+
+func TestPrintEntryEmptyPassword(t *testing.T) {
+	root := newRoot(&app{vault: "unused"})
+	var out bytes.Buffer
+	root.SetOut(&out)
+
+	if err := printEntry(root, core.Entry{Title: "Blank", Username: "alice"}, false); err != nil {
+		t.Fatalf("printEntry: %v", err)
+	}
+	if strings.Contains(out.String(), maskedPassword) {
+		t.Fatalf("output masked an empty password: %q", out.String())
 	}
 }
 

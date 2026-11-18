@@ -11,7 +11,7 @@ import (
 )
 
 func newShowCmd(a *app) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "show <query>",
 		Short: "Show an entry",
 		Args:  cobra.ExactArgs(1),
@@ -19,12 +19,18 @@ func newShowCmd(a *app) *cobra.Command {
 			return runShow(cmd, a, args[0])
 		},
 	}
+	cmd.Flags().Bool("reveal", false, "print the password instead of masking it")
+	return cmd
 }
 
 func runShow(cmd *cobra.Command, a *app, query string) error {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return errors.New("query is required")
+	}
+	reveal, err := cmd.Flags().GetBool("reveal")
+	if err != nil {
+		return err
 	}
 
 	v, err := loadVault(cmd, a)
@@ -44,15 +50,34 @@ func runShow(cmd *cobra.Command, a *app, query string) error {
 	if err != nil {
 		return err
 	}
-	return printEntry(cmd, entry)
+	if err := printEntry(cmd, entry, reveal); err != nil {
+		return err
+	}
+	if !reveal && entry.Password != "" {
+		if _, err := fmt.Fprintln(cmd.ErrOrStderr(),
+			"Password hidden; rerun with --reveal flag to print it."); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
+// maskedPassword stands in for a hidden password. Its fixed length keeps the
+// real password length out of the output.
+const maskedPassword = "********"
+
 // printEntry writes the entry fields to stdout, omitting empty optional ones.
-func printEntry(cmd *cobra.Command, e core.Entry) error {
+// The password is masked unless reveal is true.
+func printEntry(cmd *cobra.Command, e core.Entry, reveal bool) error {
+	password := e.Password
+	if !reveal && password != "" {
+		password = maskedPassword
+	}
+
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
 	_, _ = fmt.Fprintf(w, "Title:\t%s\n", e.Title)
 	_, _ = fmt.Fprintf(w, "Username:\t%s\n", e.Username)
-	_, _ = fmt.Fprintf(w, "Password:\t%s\n", e.Password)
+	_, _ = fmt.Fprintf(w, "Password:\t%s\n", password)
 	if e.URL != "" {
 		_, _ = fmt.Fprintf(w, "URL:\t%s\n", e.URL)
 	}
