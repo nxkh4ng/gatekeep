@@ -42,6 +42,10 @@ func isLetter(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
 }
 
+func isAlnum(r rune) bool {
+	return isLetter(r) || r >= '0' && r <= '9'
+}
+
 func TestGenDefaults(t *testing.T) {
 	out, err := executeGen(t, "gen")
 	if err != nil {

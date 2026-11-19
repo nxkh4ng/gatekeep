@@ -23,6 +23,8 @@ func newEditCmd(a *app) *cobra.Command {
 	cmd.Flags().String("url", "", "new URL")
 	cmd.Flags().String("notes", "", "new notes")
 	cmd.Flags().Bool("password", false, "prompt for a new password")
+	cmd.Flags().BoolP("generate", "g", false, "generate a new password instead of prompting")
+	registerGenFlags(cmd)
 	return cmd
 }
 
@@ -30,6 +32,18 @@ func runEdit(cmd *cobra.Command, a *app, query string) error {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return errors.New("query is required")
+	}
+
+	policy, generate, err := resolveGenPolicy(cmd)
+	if err != nil {
+		return err
+	}
+	passwordFlag, err := cmd.Flags().GetBool("password")
+	if err != nil {
+		return err
+	}
+	if generate && passwordFlag {
+		return errors.New("--password and --generate are mutually exclusive")
 	}
 
 	lock, err := core.LockFile(a.vault)
@@ -56,9 +70,14 @@ func runEdit(cmd *cobra.Command, a *app, query string) error {
 		return err
 	}
 
-	updated, err := editedEntry(cmd, a, current)
+	updated, err := editedEntry(cmd, a, current, generate)
 	if err != nil {
 		return err
+	}
+	if generate {
+		if updated.Password, err = core.Generate(policy); err != nil {
+			return err
+		}
 	}
 	if updated == current {
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), "No changes.")
@@ -71,13 +90,19 @@ func runEdit(cmd *cobra.Command, a *app, query string) error {
 	if err := v.SaveFile(a.vault); err != nil {
 		return fmt.Errorf("saving vault: %w", err)
 	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Updated %s\n", updated.Title)
-	return err
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Updated %s\n", updated.Title); err != nil {
+		return err
+	}
+	if generate {
+		printGeneratedHint(cmd)
+	}
+	return nil
 }
 
 // editedEntry applies the provided field flags, or runs the wizard when no
-// field flag was given.
-func editedEntry(cmd *cobra.Command, a *app, current core.Entry) (core.Entry, error) {
+// field flag was given. generate prevents the wizard and the password prompt,
+// because the caller supplies a generated password afterwards.
+func editedEntry(cmd *cobra.Command, a *app, current core.Entry, generate bool) (core.Entry, error) {
 	flags := cmd.Flags()
 	passwordFlag, err := flags.GetBool("password")
 	if err != nil {
@@ -85,7 +110,7 @@ func editedEntry(cmd *cobra.Command, a *app, current core.Entry) (core.Entry, er
 	}
 
 	if !flags.Changed("title") && !flags.Changed("username") && !flags.Changed("url") &&
-		!flags.Changed("notes") && !flags.Changed("password") {
+		!flags.Changed("notes") && !flags.Changed("password") && !generate {
 		return editWizard(cmd, a.prompter, current)
 	}
 

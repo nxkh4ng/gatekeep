@@ -22,10 +22,17 @@ func newAddCmd(a *app) *cobra.Command {
 	cmd.Flags().String("username", "", "account username (prompted when omitted)")
 	cmd.Flags().String("url", "", "entry URL (prompted when omitted)")
 	cmd.Flags().String("notes", "", "entry notes (prompted when omitted)")
+	cmd.Flags().BoolP("generate", "g", false, "generate the password instead of prompting")
+	registerGenFlags(cmd)
 	return cmd
 }
 
 func runAdd(cmd *cobra.Command, a *app, args []string) error {
+	policy, generate, err := resolveGenPolicy(cmd)
+	if err != nil {
+		return err
+	}
+
 	lock, err := core.LockFile(a.vault)
 	if err != nil {
 		return err
@@ -59,11 +66,10 @@ func runAdd(cmd *cobra.Command, a *app, args []string) error {
 		return err
 	}
 
-	password, err := requiredPassword(cmd, a.prompter, "Password: ")
+	password, err := addPassword(cmd, a, generate, policy)
 	if err != nil {
 		return err
 	}
-	defer clear(password)
 
 	url, err := stringField(cmd, a, "url", "URL (optional): ")
 	if err != nil {
@@ -77,7 +83,7 @@ func runAdd(cmd *cobra.Command, a *app, args []string) error {
 	if _, err := v.Add(core.Entry{
 		Title:    title,
 		Username: username,
-		Password: string(password),
+		Password: password,
 		URL:      url,
 		Notes:    notes,
 	}); err != nil {
@@ -86,8 +92,28 @@ func runAdd(cmd *cobra.Command, a *app, args []string) error {
 	if err := v.SaveFile(a.vault); err != nil {
 		return fmt.Errorf("saving vault: %w", err)
 	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Added %s (%s)\n", title, username)
-	return err
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Added %s (%s)\n", title, username); err != nil {
+		return err
+	}
+	if generate {
+		printGeneratedHint(cmd)
+	}
+	return nil
+}
+
+// addPassword returns the password for a new entry: generated from policy when
+// generate is true, prompted otherwise. The prompted secret is zeroed when the
+// function returns.
+func addPassword(cmd *cobra.Command, a *app, generate bool, policy core.Policy) (string, error) {
+	if generate {
+		return core.Generate(policy)
+	}
+	password, err := requiredPassword(cmd, a.prompter, "Password: ")
+	if err != nil {
+		return "", err
+	}
+	defer clear(password)
+	return string(password), nil
 }
 
 // findDuplicate returns the entry that already has the same title and

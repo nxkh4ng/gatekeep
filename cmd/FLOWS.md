@@ -42,8 +42,12 @@ flowchart TD
 
 `title`, `username`, and `password` are required. `url` and `notes` are
 optional and skipped with an empty line. A field supplied as an argument or
-flag is not prompted. The password is always prompted (there is no password
-flag).
+flag is not prompted. The password is prompted unless `--generate` is given;
+generator flags then choose its policy. The generated password is stored but
+never printed: a hint on stderr points to `show --reveal` instead.
+
+Generator policy flags (`--length`, `--charset`, and the `--min-*` family)
+require `--generate`. Using one without it is an error, not a silent no-op.
 
 Before the password prompt, `add` refuses an entry whose title and username
 already exist. Titles compare case-insensitively (`gmail` matches `Gmail`);
@@ -68,17 +72,23 @@ flowchart TD
     C1 -->|yes| D{"same title+username exists?"}
     C1 -->|no| P2["prompt Username (required, re-ask if empty)"]
     P2 --> D
-    D -->|no| U3["prompt Password (required, hidden)"]
+    D -->|no| G{"--generate?"}
+    G -->|no| U3["prompt Password (required, hidden)"]
+    G -->|yes| G2["generate from the policy flags"]
     D -->|yes, prompted| W["stderr: username already exists"]
     W --> P2
     D -->|yes, from flag| X["error: entry exists + hint (no write)"]
     U3 --> U4{"--url?"}
+    G2 --> U4
     U4 -->|yes| U5{"--notes?"}
     U4 -->|no| P3["prompt URL (optional)"]
     P3 --> U5
     U5 -->|yes| S["Add + SaveFile"]
     U5 -->|no| P4["prompt Notes (optional)"]
     P4 --> S
+    S --> O{"--generate?"}
+    O -->|yes| O2["print Added; stderr: reveal hint"]
+    O -->|no| O3["print Added"]
 ```
 
 ## `gen`
@@ -150,22 +160,32 @@ field flags, an interactive wizard asks for every field and Enter keeps the
 current value. Title and username cannot be set empty; clear the optional
 fields with `--url=` or `--notes=`.
 
+`--generate` replaces the password with one generated from its policy flags.
+It cannot be combined with `--password`. The generated password is stored but
+never printed: a hint on stderr points to `show --reveal` instead.
+
 ```mermaid
 flowchart TD
     A["gatekeep edit &lt;query&gt;"] --> L["Acquire &lt;vault&gt;.lock"]
     L --> U["Unlock"]
     U --> R["Resolve selector"]
-    R --> F{"any field flag?"}
+    R --> F{"any field or --generate flag?"}
     F -->|no| W["wizard: Title, Username, Password, URL, Notes"]
     W --> W2["Enter keeps current value"]
     W2 --> C{"anything changed?"}
     C -->|no| N["print: no changes"]
     C -->|yes| S["Update + SaveFile"]
-    F -->|yes| G["apply only the provided flags"]
-    G --> Q{"--password?"}
-    Q -->|yes| P["prompt new password (hidden)"]
-    Q -->|no| S
+    F -->|yes| G["apply the provided field flags"]
+    G --> Q{"--generate?"}
+    Q -->|yes| QG["generate from the policy flags"]
+    Q -->|no| QP{"--password?"}
+    QP -->|yes| P["prompt new password (hidden)"]
+    QP -->|no| S
+    QG --> S
     P --> S
+    S --> O{"--generate?"}
+    O -->|yes| O2["print Updated; stderr: reveal hint"]
+    O -->|no| O3["print Updated"]
 ```
 
 ## `rm`

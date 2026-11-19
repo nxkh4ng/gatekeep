@@ -221,3 +221,88 @@ func TestEditEmptyQuery(t *testing.T) {
 		t.Fatalf("prompted before validating the query: %q", p.prompts)
 	}
 }
+
+func TestEditGenerate(t *testing.T) {
+	path := writeTestVaultWithEntries(t)
+	p := &fakePrompter{passwords: [][]byte{[]byte(testMasterPassword)}}
+
+	out, errOut, err := runEditCommand(t, path, p, "Gmail",
+		"--url", "https://new.example", "--generate")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if want := []string{"Master password: "}; !slices.Equal(p.prompts, want) {
+		t.Fatalf("prompts = %q, want %q", p.prompts, want)
+	}
+	if want := "Updated Gmail\n"; out != want {
+		t.Fatalf("output = %q, want %q", out, want)
+	}
+	if !strings.Contains(errOut, "--reveal") {
+		t.Fatalf("stderr = %q, want a reveal hint", errOut)
+	}
+
+	got := findTestEntry(t, readTestEntries(t, path), "Gmail", "alice@gmail.com")
+	if len(got.Password) != 20 {
+		t.Fatalf("generated password has length %d, want 20", len(got.Password))
+	}
+	if got.URL != "https://new.example" {
+		t.Fatalf("entry URL = %q, want the new URL", got.URL)
+	}
+	if strings.Contains(out, got.Password) || strings.Contains(errOut, got.Password) {
+		t.Fatal("generated password was printed")
+	}
+}
+
+func TestEditGenerateFlags(t *testing.T) {
+	path := writeTestVaultWithEntries(t)
+	p := &fakePrompter{passwords: [][]byte{[]byte(testMasterPassword)}}
+
+	out, errOut, err := runEditCommand(t, path, p, "Gmail",
+		"--generate", "-l", "12", "--charset", "digits")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if want := "Updated Gmail\n"; out != want {
+		t.Fatalf("output = %q, want %q", out, want)
+	}
+	if !strings.Contains(errOut, "--reveal") {
+		t.Fatalf("stderr = %q, want a reveal hint", errOut)
+	}
+
+	password := findTestEntry(t, readTestEntries(t, path), "Gmail", "alice@gmail.com").Password
+	if len(password) != 12 {
+		t.Fatalf("generated password has length %d, want 12", len(password))
+	}
+	if got := countDigits(password); got != len(password) {
+		t.Fatalf("password %q has %d digits, want %d", password, got, len(password))
+	}
+	if strings.Contains(out, password) || strings.Contains(errOut, password) {
+		t.Fatal("generated password was printed")
+	}
+}
+
+func TestEditGeneratorFlagsRequireGenerate(t *testing.T) {
+	path := writeTestVaultWithEntries(t)
+	p := &fakePrompter{}
+
+	_, _, err := runEditCommand(t, path, p, "Gmail", "--length", "12")
+	if err == nil || !strings.Contains(err.Error(), "--length requires --generate") {
+		t.Fatalf("Execute() error = %v, want a --generate hint", err)
+	}
+	if len(p.prompts) != 0 {
+		t.Fatalf("prompted before rejecting the generator flags: %q", p.prompts)
+	}
+}
+
+func TestEditPasswordAndGenerateConflict(t *testing.T) {
+	path := writeTestVaultWithEntries(t)
+	p := &fakePrompter{}
+
+	_, _, err := runEditCommand(t, path, p, "Gmail", "--password", "--generate")
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("Execute() error = %v, want a mutual-exclusion error", err)
+	}
+	if len(p.prompts) != 0 {
+		t.Fatalf("prompted before rejecting the flags: %q", p.prompts)
+	}
+}

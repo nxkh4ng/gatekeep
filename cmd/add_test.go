@@ -306,3 +306,134 @@ func TestFindDuplicate(t *testing.T) {
 		t.Fatal("findDuplicate on an empty vault reported a match")
 	}
 }
+
+func TestAddGenerate(t *testing.T) {
+	path := writeTestVault(t)
+	p := &fakePrompter{passwords: [][]byte{[]byte(testMasterPassword)}}
+
+	root := newRoot(&app{vault: path, prompter: p})
+	root.SetArgs([]string{
+		"add", "YouTube",
+		"--username", "alice@gmail.com",
+		"--url", "https://youtube.com",
+		"--notes", "main account",
+		"--generate",
+	})
+	var out, errOut bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if want := []string{"Master password: "}; !slices.Equal(p.prompts, want) {
+		t.Fatalf("prompts = %q, want %q", p.prompts, want)
+	}
+	if want := "Added YouTube (alice@gmail.com)\n"; out.String() != want {
+		t.Fatalf("output = %q, want %q", out.String(), want)
+	}
+	if !strings.Contains(errOut.String(), "--reveal") {
+		t.Fatalf("stderr = %q, want a reveal hint", errOut.String())
+	}
+
+	entries := readTestEntries(t, path)
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(entries))
+	}
+	got := entries[0]
+	if len(got.Password) != 20 {
+		t.Fatalf("generated password has length %d, want 20", len(got.Password))
+	}
+	if got.Title != "YouTube" || got.Username != "alice@gmail.com" || got.URL != "https://youtube.com" {
+		t.Fatalf("entry = %+v", got)
+	}
+	if strings.Contains(out.String(), got.Password) || strings.Contains(errOut.String(), got.Password) {
+		t.Fatal("generated password was printed")
+	}
+}
+
+func TestAddGenerateFlags(t *testing.T) {
+	path := writeTestVault(t)
+	p := &fakePrompter{passwords: [][]byte{[]byte(testMasterPassword)}}
+
+	root := newRoot(&app{vault: path, prompter: p})
+	root.SetArgs([]string{
+		"add", "Bank", "--username", "alice", "--generate",
+		"-l", "12", "--charset", "lower,upper,digits", "--min-digits", "2",
+		"--url=", "--notes=",
+	})
+	var out, errOut bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if want := "Added Bank (alice)\n"; out.String() != want {
+		t.Fatalf("output = %q, want %q", out.String(), want)
+	}
+	if !strings.Contains(errOut.String(), "--reveal") {
+		t.Fatalf("stderr = %q, want a reveal hint", errOut.String())
+	}
+
+	password := readTestEntries(t, path)[0].Password
+	if len(password) != 12 {
+		t.Fatalf("generated password has length %d, want 12", len(password))
+	}
+	if got := countDigits(password); got < 2 {
+		t.Fatalf("password %q has %d digits, want at least 2", password, got)
+	}
+	for _, r := range password {
+		if !isAlnum(r) {
+			t.Fatalf("password %q contains %q outside the charset", password, r)
+		}
+	}
+	if strings.Contains(out.String(), password) || strings.Contains(errOut.String(), password) {
+		t.Fatal("generated password was printed")
+	}
+}
+
+func TestAddGeneratorFlagsRequireGenerate(t *testing.T) {
+	path := writeTestVault(t)
+	p := &fakePrompter{}
+
+	root := newRoot(&app{vault: path, prompter: p})
+	root.SetArgs([]string{"add", "Bank", "--username", "alice", "--length", "12"})
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "--length requires --generate") {
+		t.Fatalf("Execute() error = %v, want a --generate hint", err)
+	}
+	if len(p.prompts) != 0 {
+		t.Fatalf("prompted before rejecting the generator flags: %q", p.prompts)
+	}
+	if entries := readTestEntries(t, path); len(entries) != 0 {
+		t.Fatalf("entries = %d, want 0", len(entries))
+	}
+}
+
+func TestAddGenerateInvalidPolicy(t *testing.T) {
+	path := writeTestVault(t)
+	p := &fakePrompter{}
+
+	root := newRoot(&app{vault: path, prompter: p})
+	root.SetArgs([]string{
+		"add", "Bank", "--username", "alice", "--generate",
+		"-l", "4", "--min-digits", "5",
+	})
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "invalid generation policy") {
+		t.Fatalf("Execute() error = %v, want an invalid-policy error", err)
+	}
+	if len(p.prompts) != 0 {
+		t.Fatalf("prompted before validating the policy: %q", p.prompts)
+	}
+	if entries := readTestEntries(t, path); len(entries) != 0 {
+		t.Fatalf("entries = %d, want 0", len(entries))
+	}
+}
